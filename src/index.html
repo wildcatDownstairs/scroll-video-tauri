@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>滚屏字幕视频生成器</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset & Design Tokens ── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --page-bg: #0b0d17;
+      --sidebar-bg: rgba(15, 17, 28, 0.88);
+      --sidebar-text: #e4e6ef;
+      --sidebar-muted: #6e7191;
+      --card-bg: rgba(255, 255, 255, 0.035);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --accent: #818cf8;
+      --accent-bright: #a78bfa;
+      --accent-dim: #6366f1;
+      --accent-glow: rgba(129, 140, 248, 0.15);
+      --accent-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+      --accent-gradient-h: linear-gradient(135deg, #4f46e5, #7c3aed);
+      --input-bg: rgba(255, 255, 255, 0.05);
+      --input-border: rgba(255, 255, 255, 0.08);
+      --input-focus-shadow: rgba(129, 140, 248, 0.2);
+      --chip-bg: rgba(129, 140, 248, 0.08);
+      --chip-border: rgba(129, 140, 248, 0.15);
+      --chip-text: #a5b4fc;
+      --danger: #fb7185;
+      --radius: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Noto Serif SC', sans-serif;
+      background: var(--page-bg);
+      background-image: radial-gradient(ellipse 80% 60% at 15% 55%, rgba(99, 102, 241, 0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 85% 25%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+      radial-gradient(ellipse 50% 40% at 60% 85%, rgba(20, 184, 166, 0.03) 0%, transparent 50%);
+      display: flex;
+      color: var(--sidebar-text);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 360px;
+      min-width: 360px;
+      height: 100vh;
+      background: var(--sidebar-bg);
+      backdrop-filter: blur(24px) saturate(1.3);
+      -webkit-backdrop-filter: blur(24px) saturate(1.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px solid rgba(255, 255, 255, 0.04);
+      position: relative;
+      z-index: 10;
+    }
+
+    .sidebar-header {
+      padding: 24px 24px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      flex-shrink: 0;
+    }
+
+    .sidebar-header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'Noto Serif SC', serif;
+      letter-spacing: 1.5px;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sidebar-header p {
+      font-size: 11px;
+      color: var(--sidebar-muted);
+      margin-top: 6px;
+      letter-spacing: 0.4px;
+    }
+
+    .sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar-body::-webkit-scrollbar { width: 4px; }
+    .sidebar-body::-webkit-scrollbar-track { background: transparent; }
+    .sidebar-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 2px; }
+    .sidebar-body::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .card:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.09);
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+      padding-bottom: 2px;
+    }
+
+    .section { display: flex; flex-direction: column; gap: 8px; }
+
+    .field-label {
+      font-size: 11px;
+      color: var(--sidebar-muted);
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+    }
+
+    /* ── Textarea ── */
+    textarea {
+      width: 100%;
+      height: 120px;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius);
+      color: var(--sidebar-text);
+      font-family: 'Noto Serif SC', serif;
+      font-size: 13px;
+      padding: 12px 14px;
+      resize: none;
+      line-height: 1.7;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--input-focus-shadow);
+    }
+    textarea::placeholder { color: rgba(255, 255, 255, 0.15); font-size: 12px; }
+
+    /* ── Chips ── */
+    .seg-chips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+    .chip {
+      font-size: 10px;
+      background: var(--chip-bg);
+      border: 1px solid var(--chip-border);
+      border-radius: 20px;
+      padding: 2px 10px;
+      color: var(--chip-text);
+      white-space: nowrap;
+      max-width: 130px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chip.accent {
+      border-color: rgba(251, 113, 133, 0.2);
+      color: #fda4af;
+      background: rgba(251, 113, 133, 0.06);
+    }
+
+    /* ── Two Column ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* ── Select ── */
+    select {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      color: var(--sidebar-text);
+      font-size: 12px;
+      padding: 8px 28px 8px 10px;
+      cursor: pointer;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236e7191'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+    }
+    select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--input-focus-shadow);
+    }
+    select option { background: #1a1d2e; }
+
+    /* ── Color Dots ── */
+    .color-row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+    .dot {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2.5px solid transparent;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .dot:hover { transform: scale(1.2); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4); }
+    .dot.on {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow), 0 2px 8px rgba(0, 0, 0, 0.3);
+      transform: scale(1.1);
+    }
+
+    /* ── Range Sliders ── */
+    .range-wrap { display: flex; align-items: center; gap: 10px; }
+    input[type="range"] {
+      flex: 1;
+      height: 16px;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      -webkit-appearance: none;
+      appearance: none;
+      outline: none;
+      padding: 0;
+      margin: 0;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--page-bg);
+      box-shadow: 0 0 8px rgba(129, 140, 248, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+      cursor: pointer;
+      transition: box-shadow 0.15s, transform 0.15s;
+      margin-top: -6px;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      box-shadow: 0 0 12px rgba(129, 140, 248, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+    .rval {
+      font-size: 12px;
+      color: var(--accent);
+      min-width: 38px;
+      text-align: right;
+      flex-shrink: 0;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent-gradient);
+      border: none;
+      border-radius: var(--radius);
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all var(--transition);
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3), inset 0 1px rgba(255, 255, 255, 0.12);
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary:hover {
+      background: var(--accent-gradient-h);
+      box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45), inset 0 1px rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: translateY(0) scale(0.98); }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius);
+      color: var(--sidebar-text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* ── Status ── */
+    .status-line {
+      font-size: 11px;
+      color: var(--sidebar-muted);
+      text-align: center;
+      letter-spacing: 0.3px;
+      min-height: 16px;
+      padding: 4px 0;
+    }
+
+    /* ── Music ── */
+    .music-row { display: flex; gap: 8px; align-items: center; }
+    .music-row .btn-secondary {
+      width: auto;
+      padding: 6px 14px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .music-name {
+      font-size: 11px;
+      color: var(--sidebar-muted);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .music-del {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(251, 113, 133, 0.1);
+      border: none;
+      color: var(--danger);
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background var(--transition);
+    }
+    .music-del:hover { background: rgba(251, 113, 133, 0.2); }
+
+    /* ── Preview Area ── */
+    .preview {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 24px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .canvas-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      width: 100%;
+    }
+
+    .canvas-shell {
+      border: 6px solid rgba(255, 255, 255, 0.06);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03),
+      0 25px 60px rgba(0, 0, 0, 0.5),
+      0 10px 20px rgba(0, 0, 0, 0.3),
+      0 0 40px rgba(99, 102, 241, 0.06);
+      overflow: hidden;
+      line-height: 0;
+      background: #000;
+    }
+
+    canvas {
+      display: block;
+      max-height: calc(100vh - 140px);
+      width: auto;
+      height: auto;
+    }
+
+    /* ── Playbar ── */
+    .playbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 480px;
+      flex-shrink: 0;
+    }
+
+    .ctrl-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--sidebar-text);
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+      flex-shrink: 0;
+    }
+    .ctrl-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: scale(1.08);
+    }
+    .ctrl-btn:active { transform: scale(0.95); }
+
+    .progress-track {
+      flex: 1;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      cursor: pointer;
+      position: relative;
+      transition: height 0.15s;
+    }
+    .progress-track:hover { height: 6px; }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-gradient);
+      border-radius: 2px;
+      pointer-events: none;
+      box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+    }
+
+    .time-label {
+      font-size: 12px;
+      color: var(--sidebar-muted);
+      min-width: 40px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .divider { display: none; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .sidebar { width: 320px; min-width: 320px; }
+      .sidebar-body { padding: 14px 14px 20px; }
+      .card { padding: 14px; }
+    }
+    @media (max-width: 720px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; min-width: 0; height: auto; max-height: 45vh; }
+      .preview { padding: 16px; gap: 12px; }
+      canvas { max-height: calc(55vh - 80px); }
+      .playbar { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h1>📜 滚屏字幕视频</h1>
+    <p>输入文案 → 调整样式 → 生成预览 → 录制导出</p>
+  </div>
+
+  <div class="sidebar-body">
+
+    <!-- Card 1: 文案输入 -->
+    <div class="card">
+      <div class="card-title">✍️ 文案输入</div>
+      <div class="section">
+        <textarea id="txt" placeholder="粘贴文案，按句号/感叹号/问号分段，逗号不换行。&#10;【对话框内容】会用红色高亮显示。&#10;&#10;例：冯唐有乘龙之才，一生不遇。&#10;【妈妈，别把我交给别人！】"></textarea>
+      </div>
+      <div class="section">
+        <div class="field-label">分段预览</div>
+        <div class="seg-chips" id="chips">
+          <span style="font-size:11px;color:var(--sidebar-muted)">输入文案后自动分段</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: 视觉风格 -->
+    <div class="card">
+      <div class="card-title">🎨 视觉风格</div>
+      <div class="two-col">
+        <div>
+          <div class="field-label">背景风格</div>
+          <select id="bg">
+            <option value="bamboo">水墨竹林</option>
+            <option value="paper">宣纸质感</option>
+            <option value="mist">山水烟雾</option>
+            <option value="night">暗夜星空</option>
+            <option value="warm">渐变暖色</option>
+            <option value="custom">自定义图片</option>
+          </select>
+          <input type="file" id="bgFile" accept="image/*" style="display:none">
+        </div>
+        <div>
+          <div class="field-label">字体风格</div>
+          <select id="font">
+            <option value="serif">宋体（古典）</option>
+            <option value="modern">黑体（现代）</option>
+          </select>
+        </div>
+      </div>
+      <div class="two-col">
+        <div>
+          <div class="field-label">主字颜色</div>
+          <div class="color-row" id="mc">
+            <div class="dot on" data-c="#8B1A1A" style="background:#8B1A1A" title="深红"></div>
+            <div class="dot" data-c="#1a1a1a" style="background:#1a1a1a" title="墨黑"></div>
+            <div class="dot" data-c="#2C4A7C" style="background:#2C4A7C" title="深蓝"></div>
+            <div class="dot" data-c="#3D6B3D" style="background:#3D6B3D" title="深绿"></div>
+            <div class="dot" data-c="#7B4A2D" style="background:#7B4A2D" title="棕褐"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">强调色（对话框）</div>
+          <div class="color-row" id="ac">
+            <div class="dot on" data-c="#CC2200" style="background:#CC2200" title="朱红"></div>
+            <div class="dot" data-c="#C8783A" style="background:#C8783A" title="琥珀"></div>
+            <div class="dot" data-c="#8B4513" style="background:#8B4513" title="棕红"></div>
+            <div class="dot" data-c="#7B0099" style="background:#7B0099" title="紫"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: 排版参数 -->
+    <div class="card">
+      <div class="card-title">📐 排版参数</div>
+      <div class="section">
+        <div class="field-label">字体大小</div>
+        <div class="range-wrap">
+          <input type="range" id="fs" min="12" max="52" value="36" step="2">
+          <span class="rval" id="fsv">36px</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="field-label">行间距</div>
+        <div class="range-wrap">
+          <input type="range" id="lh" min="1.2" max="3.0" value="1.9" step="0.1">
+          <span class="rval" id="lhv">1.9×</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="field-label">段间距</div>
+        <div class="range-wrap">
+          <input type="range" id="pg" min="0.5" max="4" value="1.6" step="0.1">
+          <span class="rval" id="pgv">1.6×</span>
+        </div>
+      </div>
+      <div class="section">
+        <div class="field-label">滚动速度</div>
+        <div class="range-wrap">
+          <input type="range" id="sp" min="0.2" max="4" value="1" step="0.1">
+          <span class="rval" id="spv">1.0×</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: 背景音乐 -->
+    <div class="card">
+      <div class="card-title">🎵 背景音乐</div>
+      <div class="music-row">
+        <button class="btn-secondary" id="btnMusic">上传音乐</button>
+        <input type="file" id="musicFile" accept="audio/mp3,audio/m4a,audio/mpeg,audio/mp4,audio/*" style="display:none">
+        <span class="music-name" id="musicName">未选择</span>
+        <button class="music-del" id="btnMusicDel" title="移除音乐">✕</button>
+      </div>
+      <div class="range-wrap">
+        <span style="font-size:12px;color:var(--sidebar-muted)">🔈</span>
+        <input type="range" id="vol" min="0" max="1" value="0.5" step="0.05">
+        <span class="rval" id="volv">50%</span>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="section" style="gap:8px; margin-top:4px">
+      <button class="btn-primary" id="btnGo">▶ 生成预览</button>
+      <button class="btn-secondary" id="btnRec">⏺ 录制视频（WebM）</button>
+      <div class="status-line" id="stat">输入文案后点击「生成预览」</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Preview ── -->
+<div class="preview">
+  <div class="canvas-wrap">
+    <div class="canvas-shell">
+      <canvas id="cv"></canvas>
+    </div>
+  </div>
+  <div class="playbar">
+    <button class="ctrl-btn" id="btnR" title="重播">↺</button>
+    <div class="progress-track" id="prog">
+      <div class="progress-fill" id="pf" style="width:0%"></div>
+    </div>
+    <button class="ctrl-btn" id="btnP" title="暂停/播放">⏸</button>
+    <span class="time-label" id="timeLabel">0s</span>
+  </div>
+</div>
+
+<script>
+// ── DOM cache ──
+const $ = id => document.getElementById(id);
+const cv = $('cv');
+const elBtnP = $('btnP'), elStat = $('stat'), elPf = $('pf'), elTime = $('timeLabel');
+const elBg = $('bg'), elFont = $('font'), elFs = $('fs'), elLh = $('lh');
+const elPg = $('pg'), elSp = $('sp'), elVol = $('vol'), elChips = $('chips');
+
+// ── Canvas setup ──
+const W = 405, H = 720;
+const dpr = window.devicePixelRatio || 1;
+cv.width = W * dpr;
+cv.height = H * dpr;
+cv.style.width = W + 'px';
+cv.style.height = H + 'px';
+const ctx = cv.getContext('2d');
+ctx.scale(dpr, dpr);
+
+let segs = [], layout = [];
+let scrollY = 0, totalH = 0;
+let playing = false, animId = null;
+let mainC = '#8B1A1A', accentC = '#CC2200';
+let mrec = null, chunks = [];
+
+// 自定义背景图片
+let customBgImg = null;
+
+// 背景音乐
+let audioCtx = null, audioSource = null, audioGainNode = null;
+let audioBuffer = null;
+let musicStreamDest = null;
+
+// ── Background cache (offscreen canvas) ──
+let bgCache = document.createElement('canvas');
+bgCache.width = W * dpr;
+bgCache.height = H * dpr;
+let bgCacheCtx = bgCache.getContext('2d');
+bgCacheCtx.scale(dpr, dpr);
+let bgDirty = true;
+
+// Fade mask caches
+let fadeMaskTop = null, fadeMaskBot = null;
+let fadeMaskNight = null;
+
+function buildFadeMasks() {
+  fadeMaskTop = ctx.createLinearGradient(0, 0, 0, H * 0.2);
+  fadeMaskTop.addColorStop(0, 'rgba(240,236,224,1)');
+  fadeMaskTop.addColorStop(1, 'rgba(0,0,0,0)');
+  fadeMaskBot = ctx.createLinearGradient(0, H * 0.8, 0, H);
+  fadeMaskBot.addColorStop(0, 'rgba(0,0,0,0)');
+  fadeMaskBot.addColorStop(1, 'rgba(240,236,224,1)');
+  fadeMaskNight = {
+    top: ctx.createLinearGradient(0, 0, 0, H * 0.2),
+    bot: ctx.createLinearGradient(0, H * 0.8, 0, H)
+  };
+  fadeMaskNight.top.addColorStop(0, 'rgba(8,8,28,1)');
+  fadeMaskNight.top.addColorStop(1, 'rgba(0,0,0,0)');
+  fadeMaskNight.bot.addColorStop(0, 'rgba(0,0,0,0)');
+  fadeMaskNight.bot.addColorStop(1, 'rgba(8,8,28,1)');
+}
+buildFadeMasks();
+
+const paperDots = Array.from({length: 200}, () => [
+  Math.random() * W, Math.random() * H, Math.random() * 2.5,
+  Math.random() > 0.5 ? '#8B6914' : '#a09070'
+]);
+
+function markBgDirty() { bgDirty = true; }
+
+// ── Background (draws to target context) ──
+function renderBg(c) {
+  const b = elBg.value;
+  c.clearRect(0, 0, W, H);
+
+  if (b === 'custom' && customBgImg) {
+    const img = customBgImg;
+    const imgRatio = img.width / img.height;
+    const canvasRatio = W / H;
+    let sx, sy, sw, sh;
+    if (imgRatio > canvasRatio) {
+      sh = img.height; sw = sh * canvasRatio;
+      sx = (img.width - sw) / 2; sy = 0;
+    } else {
+      sw = img.width; sh = sw / canvasRatio;
+      sx = 0; sy = (img.height - sh) / 2;
+    }
+    c.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+    return;
+  }
+
+  if (b === 'bamboo') {
+    c.fillStyle = '#f0ece0'; c.fillRect(0, 0, W, H);
+    c.save(); c.globalAlpha = 0.07; c.strokeStyle = '#6a8060';
+    for (let i = 0; i < 7; i++) {
+      const x = 28 + i * 65 + (i % 2) * 18;
+      c.lineWidth = 5 + i % 3 * 3;
+      c.beginPath(); c.moveTo(x, 0);
+      c.bezierCurveTo(x + 18, H * .3, x - 12, H * .6, x + 10, H); c.stroke();
+      for (let j = 50; j < H; j += 80 + i * 8) {
+        c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(x, j); c.lineTo(x + 32, j - 24); c.stroke();
+        c.beginPath(); c.moveTo(x, j); c.lineTo(x - 24, j - 20); c.stroke();
+      }
+    }
+    c.restore();
+  } else if (b === 'paper') {
+    c.fillStyle = '#f8f2e6'; c.fillRect(0, 0, W, H);
+    c.save(); c.globalAlpha = 0.04;
+    for (const [x, y, s, col] of paperDots) { c.fillStyle = col; c.fillRect(x, y, s, s); }
+    c.restore();
+  } else if (b === 'mist') {
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#e8eef5'); g.addColorStop(1, '#dce8dc');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.save(); c.globalAlpha = 0.06; c.fillStyle = '#8090a0';
+    for (let i = 0; i < 5; i++) {
+      c.beginPath();
+      c.ellipse(W * .05 + i * 88, H * .72 - i * 38, 110 + i * 28, 55 + i * 9, .1 * i, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+  } else if (b === 'night') {
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#08081c'); g.addColorStop(1, '#181028');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.save(); c.globalAlpha = .55; c.fillStyle = '#fff';
+    for (let i = 0; i < 120; i++) {
+      const sx = (i * 137.508) % W, sy = (i * 97.333) % (H * .65);
+      const r = (i % 4) * .4 + .2;
+      c.beginPath(); c.arc(sx, sy, r, 0, Math.PI * 2); c.fill();
+    }
+    c.restore();
+  } else {
+    const g = c.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#fef4e4'); g.addColorStop(.5, '#fae8d0'); g.addColorStop(1, '#f5dcc0');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+  }
+}
+
+function ensureBgCache() {
+  if (!bgDirty) return;
+  renderBg(bgCacheCtx);
+  bgDirty = false;
+}
+
+function isNightBg() {
+  const v = elBg.value;
+  return v === 'night' || (v === 'custom' && customBgImg);
+}
+
+// ── Parse ──
+function parse(text) {
+  const res = [];
+  const lines = text.split('\n').filter(l => l.trim());
+  for (const line of lines) {
+    const parts = line.split(/(?<=[。！？!?])/).map(s => s.trim()).filter(Boolean);
+    const src = parts.length ? parts : [line.trim()];
+    for (const p of src) {
+      if (p) res.push({ text: p, isAccent: /^[【「『]/.test(p) });
+    }
+  }
+  return res.length ? res : [{ text: text.trim(), isAccent: false }];
+}
+
+// ── Font ──
+function fontStr(size, bold) {
+  const f = elFont.value;
+  const w = bold ? '700' : '400';
+  return f === 'serif'
+    ? `${w} ${size}px 'Noto Serif SC', SimSun, serif`
+    : `${w} ${size}px 'Microsoft YaHei', 'PingFang SC', sans-serif`;
+}
+
+// ── Word wrap ──
+function wrapText(text, maxW, font) {
+  ctx.font = font;
+  const lines = []; let cur = '';
+  for (const ch of text) {
+    if (ctx.measureText(cur + ch).width > maxW && cur) { lines.push(cur); cur = ch; }
+    else cur += ch;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// ── Build layout ──
+function buildLayout() {
+  const fs = parseInt(elFs.value);
+  const lhMult = parseFloat(elLh.value);
+  const pgMult = parseFloat(elPg.value);
+  const lh = fs * lhMult;
+  const pad = 44, maxW = W - pad * 2;
+  let y = H * 0.35;
+  layout = [];
+  for (const seg of segs) {
+    const font = fontStr(fs, seg.isAccent);
+    const lines = wrapText(seg.text, maxW, font);
+    const bh = lines.length * lh;
+    layout.push({ lines, y, height: bh, isAccent: seg.isAccent, font, lh, fs });
+    y += bh + fs * pgMult;
+  }
+  totalH = y + H * 0.5;
+}
+
+// ── Draw frame ──
+function drawFrame() {
+  ensureBgCache();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(bgCache, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const night = isNightBg();
+  ctx.save();
+  ctx.translate(0, -scrollY);
+  const pad = 44;
+
+  for (const b of layout) {
+    const col = b.isAccent ? accentC : (night ? '#f0e8d0' : mainC);
+    for (let i = 0; i < b.lines.length; i++) {
+      const ly = b.y + i * b.lh;
+      if (ly - scrollY > H + 100 || ly - scrollY < -100) continue;
+      ctx.font = b.font;
+      ctx.fillStyle = col;
+      ctx.textAlign = 'left';
+      ctx.fillText(b.lines[i], pad, ly);
+    }
+  }
+  ctx.restore();
+
+  const mt = night ? fadeMaskNight.top : fadeMaskTop;
+  const mb = night ? fadeMaskNight.bot : fadeMaskBot;
+  ctx.fillStyle = mt; ctx.fillRect(0, 0, W, H * 0.2);
+  ctx.fillStyle = mb; ctx.fillRect(0, H * 0.8, W, H * 0.2);
+}
+
+// ── Animate ──
+let lastFrameTime = 0;
+function animate(timestamp) {
+  if (!playing) return;
+  if (!timestamp) { animId = requestAnimationFrame(animate); return; }
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  const dt = Math.min(timestamp - lastFrameTime, 100);
+  lastFrameTime = timestamp;
+
+  const spd = parseFloat(elSp.value);
+  scrollY += spd * dt / 16.667;
+
+  const max = totalH - H;
+  if (scrollY >= max) {
+    scrollY = max;
+    playing = false;
+    elBtnP.textContent = '▶';
+    elStat.textContent = '播放完毕 ✓';
+    stopMusicPlayback();
+  }
+  drawFrame();
+  updateProgress();
+  animId = requestAnimationFrame(animate);
+}
+
+function updateProgress() {
+  const pct = Math.min(100, (scrollY / Math.max(1, totalH - H)) * 100);
+  elPf.style.width = pct.toFixed(1) + '%';
+  const elapsed = Math.round(scrollY / parseFloat(elSp.value) / 60);
+  elTime.textContent = elapsed + 's';
+}
+
+// ── Start ──
+function startPlay() {
+  const text = $('txt').value.trim();
+  if (!text) { setStatus('请先输入文案内容'); return; }
+  segs = parse(text);
+  buildLayout();
+  scrollY = 0;
+  playing = true;
+  lastFrameTime = 0;
+  elBtnP.textContent = '⏸';
+  setStatus(`共 ${segs.length} 段，匀速滚动中...`);
+  updateChips();
+  if (animId) cancelAnimationFrame(animId);
+  startMusicPlayback();
+  animate();
+}
+
+function updateChips() {
+  elChips.innerHTML = '';
+  for (const s of segs) {
+    const d = document.createElement('div');
+    d.className = 'chip' + (s.isAccent ? ' accent' : '');
+    d.title = s.text;
+    d.textContent = s.text.substring(0, 14) + (s.text.length > 14 ? '…' : '');
+    elChips.appendChild(d);
+  }
+}
+
+function setStatus(msg) { elStat.textContent = msg; }
+
+// ── Controls ──
+$('btnGo').addEventListener('click', startPlay);
+
+$('btnR').addEventListener('click', () => {
+  scrollY = 0; playing = true; lastFrameTime = 0;
+  elBtnP.textContent = '⏸';
+  setStatus('重新播放');
+  if (animId) cancelAnimationFrame(animId);
+  startMusicPlayback();
+  if (layout.length) animate(); else startPlay();
+});
+
+$('btnP').addEventListener('click', () => {
+  if (!layout.length) return;
+  playing = !playing;
+  elBtnP.textContent = playing ? '⏸' : '▶';
+  if (playing) {
+    lastFrameTime = 0;
+    if (animId) cancelAnimationFrame(animId);
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    animate();
+  } else {
+    if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+  }
+});
+
+$('prog').addEventListener('click', e => {
+  if (!layout.length) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  scrollY = ((e.clientX - r.left) / r.width) * (totalH - H);
+  drawFrame(); updateProgress();
+});
+
+// ── Record (Tauri 版本：通过 invoke 保存到本地) ──
+$('btnRec').addEventListener('click', () => {
+  if (!layout.length) { setStatus('请先生成预览'); return; }
+  if (mrec && mrec.state === 'recording') { mrec.stop(); return; }
+
+  chunks = []; scrollY = 0; playing = true; lastFrameTime = 0;
+  elBtnP.textContent = '⏸';
+
+  let mimeType = 'video/webm;codecs=vp9';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+  const videoStream = cv.captureStream(30);
+  let combinedStream = videoStream;
+
+  if (audioBuffer && audioCtx) {
+    musicStreamDest = audioCtx.createMediaStreamDestination();
+    const recSource = audioCtx.createBufferSource();
+    recSource.buffer = audioBuffer;
+    const recGain = audioCtx.createGain();
+    recGain.gain.value = parseFloat(elVol.value);
+    recSource.connect(recGain);
+    recGain.connect(musicStreamDest);
+    recSource.start(0);
+
+    combinedStream = new MediaStream([
+      ...videoStream.getVideoTracks(),
+      ...musicStreamDest.stream.getAudioTracks()
+    ]);
+  }
+
+  mrec = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 5_000_000 });
+  mrec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+  mrec.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    // Tauri：通过 invoke 调用 Rust 后端保存文件
+    if (window.__TAURI__) {
+      try {
+        setStatus('正在保存...');
+        const arrayBuf = await blob.arrayBuffer();
+        const data = Array.from(new Uint8Array(arrayBuf));
+        const path = await window.__TAURI__.core.invoke('save_video', { data });
+        const fileName = path.split(/[/\\]/).pop();
+        setStatus('视频已保存 ✓ ' + fileName);
+      } catch (err) {
+        if (err === 'canceled') setStatus('已取消保存');
+        else setStatus('保存失败: ' + err);
+      }
+    } else {
+      // 浏览器回退方案
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'scroll-caption.webm'; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      setStatus('视频已下载 ✓');
+    }
+    $('btnRec').textContent = '⏺ 录制视频（WebM）';
+  };
+  mrec.start(100);
+  $('btnRec').textContent = '⏹ 停止录制';
+  setStatus('录制中...');
+  startMusicPlayback();
+  if (animId) cancelAnimationFrame(animId);
+  animate();
+
+  const chk = setInterval(() => {
+    if (!playing && mrec && mrec.state === 'recording') {
+      mrec.stop(); clearInterval(chk);
+      stopMusicPlayback();
+    }
+  }, 300);
+});
+
+// ── Range inputs ──
+elFs.addEventListener('input', function () {
+  $('fsv').textContent = this.value + 'px';
+  if (layout.length) { buildLayout(); drawFrame(); }
+});
+elLh.addEventListener('input', function () {
+  $('lhv').textContent = parseFloat(this.value).toFixed(1) + '×';
+  if (layout.length) { buildLayout(); drawFrame(); }
+});
+elPg.addEventListener('input', function () {
+  $('pgv').textContent = parseFloat(this.value).toFixed(1) + '×';
+  if (layout.length) { buildLayout(); drawFrame(); }
+});
+elSp.addEventListener('input', function () {
+  $('spv').textContent = parseFloat(this.value).toFixed(1) + '×';
+});
+
+// ── Custom background image ──
+elBg.addEventListener('change', () => {
+  if (elBg.value === 'custom') $('bgFile').click();
+  markBgDirty();
+  if (layout.length) drawFrame(); else { ensureBgCache(); blitBgAndPlaceholder(); }
+});
+
+$('bgFile').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      customBgImg = img;
+      elBg.value = 'custom';
+      markBgDirty();
+      if (layout.length) drawFrame(); else { ensureBgCache(); blitBgAndPlaceholder(); }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+elFont.addEventListener('change', () => {
+  if (layout.length) { buildLayout(); drawFrame(); }
+});
+
+// ── Color pickers ──
+document.querySelectorAll('#mc .dot').forEach(d => d.addEventListener('click', function () {
+  document.querySelectorAll('#mc .dot').forEach(x => x.classList.remove('on'));
+  this.classList.add('on'); mainC = this.dataset.c;
+  if (layout.length) drawFrame();
+}));
+document.querySelectorAll('#ac .dot').forEach(d => d.addEventListener('click', function () {
+  document.querySelectorAll('#ac .dot').forEach(x => x.classList.remove('on'));
+  this.classList.add('on'); accentC = this.dataset.c;
+  if (layout.length) drawFrame();
+}));
+
+// ── Background music ──
+function initAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+$('btnMusic').addEventListener('click', () => $('musicFile').click());
+
+$('musicFile').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  initAudioCtx();
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      audioBuffer = await audioCtx.decodeAudioData(e.target.result);
+      $('musicName').textContent = file.name;
+      $('btnMusicDel').style.display = 'flex';
+      setStatus('音乐已加载 ✓');
+    } catch (err) {
+      setStatus('音乐加载失败: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+$('btnMusicDel').addEventListener('click', () => {
+  stopMusicPlayback();
+  audioBuffer = null;
+  $('musicName').textContent = '未选择';
+  $('btnMusicDel').style.display = 'none';
+  $('musicFile').value = '';
+});
+
+elVol.addEventListener('input', function () {
+  $('volv').textContent = Math.round(this.value * 100) + '%';
+  if (audioGainNode) audioGainNode.gain.value = parseFloat(this.value);
+});
+
+function startMusicPlayback() {
+  if (!audioBuffer || !audioCtx) return;
+  stopMusicPlayback();
+  audioSource = audioCtx.createBufferSource();
+  audioSource.buffer = audioBuffer;
+  audioGainNode = audioCtx.createGain();
+  audioGainNode.gain.value = parseFloat(elVol.value);
+  audioSource.connect(audioGainNode);
+  audioGainNode.connect(audioCtx.destination);
+  audioSource.start(0);
+}
+
+function stopMusicPlayback() {
+  if (audioSource) {
+    try { audioSource.stop(); } catch (e) { }
+    audioSource = null;
+  }
+}
+
+// ── Init ──
+function blitBgAndPlaceholder() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(bgCache, 0, 0);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawPlaceholder();
+}
+
+function drawPlaceholder() {
+  ctx.fillStyle = 'rgba(100,80,60,0.2)';
+  ctx.font = "14px 'Noto Serif SC', serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('输入文案后点击「生成预览」', W / 2, H / 2);
+}
+
+ensureBgCache();
+blitBgAndPlaceholder();
+</script>
+</body>
+</html>
