@@ -4,6 +4,16 @@
 
 应用界面提供文案输入、字体风格、颜色、字号、行高、滚动速度、背景风格、背景音乐等调节项。预览渲染在 `canvas` 上，录制时通过浏览器 `MediaRecorder` 采集视频流，并在 Tauri 桌面端通过 Rust 命令弹出保存对话框，把视频保存到本地。
 
+## 演示
+
+![项目演示](docs/assets/demo.gif)
+
+## 界面预览
+
+| 白色背景 | 黑色背景 |
+| --- | --- |
+| ![白色背景预览](docs/assets/screenshot-light.png) | ![黑色背景预览](docs/assets/screenshot-dark.png) |
+
 ## 功能特性
 
 - 输入文案并实时生成滚屏字幕预览
@@ -25,6 +35,8 @@
 
 ```text
 .
+├── docs/
+│   └── assets/           # README 用到的演示 GIF 和截图
 ├── src/
 │   └── index.html        # 单文件前端界面与预览/录制逻辑
 ├── src-tauri/
